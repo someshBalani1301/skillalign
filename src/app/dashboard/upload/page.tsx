@@ -10,7 +10,7 @@ import { Button, Card, Alert } from "@/components/ui";
 import FileUploadZone from "@/components/upload/FileUploadZone";
 import { ROUTES, MESSAGES } from "@/lib/constants";
 import { formatDate } from "@/utils";
-import { extractTextFromPDF } from "@/lib/clientPdfParser";
+import { extractTextFromFile } from "@/lib/clientPdfParser";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -33,34 +33,10 @@ export default function UploadPage() {
 
       let extractedText = "";
 
-      // Parse PDF client-side to avoid Node.js canvas issues
-      if (file.type === "application/pdf") {
-        console.log("Parsing PDF client-side...");
-        extractedText = await extractTextFromPDF(file);
-        console.log("PDF text extracted, length:", extractedText.length);
-      } else {
-        // For DOCX, still use server-side parsing
-        console.log("Parsing DOCX server-side...");
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const response = await fetch("/api/resume/parse", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to parse resume");
-        }
-
-        const result = await response.json();
-        if (!result.success) {
-          throw new Error(result.error || "Failed to parse resume");
-        }
-
-        extractedText = result.data.rawText;
-      }
+      // Parse file client-side (works for both PDF and DOCX)
+      console.log("Parsing file client-side...");
+      extractedText = await extractTextFromFile(file);
+      console.log("File text extracted, length:", extractedText.length);
 
       // Send extracted text to server for structured parsing
       console.log("Sending text for structured parsing...");

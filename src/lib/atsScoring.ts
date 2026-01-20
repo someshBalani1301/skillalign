@@ -4,6 +4,245 @@
 
 import { Resume, ATSScore } from "@/types";
 
+// Module-level constants to avoid recreating on every function call
+const STOP_WORDS = new Set([
+  "we",
+  "are",
+  "is",
+  "am",
+  "was",
+  "were",
+  "been",
+  "be",
+  "being",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "could",
+  "should",
+  "may",
+  "might",
+  "must",
+  "can",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "in",
+  "on",
+  "at",
+  "to",
+  "for",
+  "of",
+  "with",
+  "by",
+  "from",
+  "as",
+  "into",
+  "through",
+  "during",
+  "before",
+  "after",
+  "above",
+  "below",
+  "up",
+  "down",
+  "out",
+  "off",
+  "over",
+  "under",
+  "again",
+  "further",
+  "then",
+  "once",
+  "here",
+  "there",
+  "when",
+  "where",
+  "why",
+  "how",
+  "all",
+  "both",
+  "each",
+  "few",
+  "more",
+  "most",
+  "other",
+  "some",
+  "such",
+  "no",
+  "nor",
+  "not",
+  "only",
+  "own",
+  "same",
+  "so",
+  "than",
+  "too",
+  "very",
+  "this",
+  "that",
+  "these",
+  "those",
+  "who",
+  "which",
+  "what",
+  "our",
+  "your",
+  "their",
+  "seeking",
+  "looking",
+  "join",
+  "team",
+  "company",
+  "role",
+  "position",
+  "opportunity",
+  "candidate",
+  "ideal",
+  "perfect",
+  "great",
+  "good",
+  "excellent",
+  "strong",
+  "solid",
+  "proven",
+  "work",
+  "working",
+  "able",
+  "using",
+  "use",
+  "used",
+  "growing",
+  "dynamic",
+  "fast",
+  "paced",
+  "innovative",
+  "exciting",
+]);
+
+const KNOWN_TECH = new Set([
+  "react",
+  "angular",
+  "vue",
+  "svelte",
+  "next",
+  "nuxt",
+  "node",
+  "express",
+  "django",
+  "flask",
+  "spring",
+  "laravel",
+  "typescript",
+  "javascript",
+  "python",
+  "java",
+  "ruby",
+  "php",
+  "go",
+  "rust",
+  "swift",
+  "kotlin",
+  "html",
+  "css",
+  "sass",
+  "scss",
+  "tailwind",
+  "bootstrap",
+  "sql",
+  "mysql",
+  "postgresql",
+  "mongodb",
+  "redis",
+  "elasticsearch",
+  "docker",
+  "kubernetes",
+  "jenkins",
+  "gitlab",
+  "github",
+  "git",
+  "aws",
+  "azure",
+  "gcp",
+  "cloud",
+  "api",
+  "rest",
+  "graphql",
+  "grpc",
+  "agile",
+  "scrum",
+  "kanban",
+  "devops",
+  "testing",
+  "jest",
+  "cypress",
+  "selenium",
+  "mocha",
+  "webpack",
+  "babel",
+  "vite",
+  "rollup",
+  "redux",
+  "mobx",
+  "zustand",
+  "recoil",
+  "microservices",
+  "serverless",
+  "lambda",
+  "linux",
+  "unix",
+  "bash",
+  "shell",
+  "ci",
+  "cd",
+  "pipeline",
+  "deployment",
+  "frontend",
+  "backend",
+  "fullstack",
+  "design",
+  "architecture",
+  "patterns",
+  "performance",
+  "optimization",
+  "scalability",
+  "security",
+  "authentication",
+  "authorization",
+  "developer",
+  "engineer",
+  "programmer",
+  "architect",
+  "lead",
+  "senior",
+]);
+
+const MULTI_WORD_PATTERNS = [
+  /\b(react\.?js|angular\.?js|vue\.?js|next\.?js|node\.?js|express\.?js)\b/gi,
+  /\b(full[- ]stack|front[- ]end|back[- ]end|micro[- ]frontend)\b/gi,
+  /\b(machine learning|artificial intelligence|data science|cloud computing)\b/gi,
+  /\b(ci\/cd|rest api|graphql|nosql|postgresql|mongodb)\b/gi,
+  /\b(aws|azure|gcp|google cloud|cloud platform)\b/gi,
+  /\b(type[- ]?script|java[- ]?script|c\+\+|c#)\b/gi,
+];
+
+// Helper function to check keyword variations (used by multiple functions)
+function keywordExistsInText(keyword: string, text: string): boolean {
+  const normalized = keyword.toLowerCase();
+  if (text.includes(normalized)) return true;
+  if (text.includes(normalized.replace(/\s+/g, ""))) return true;
+  if (text.includes(normalized.replace(/\s+/g, "-"))) return true;
+  return false;
+}
+
 /**
  * Calculate overall ATS score for a resume
  */
@@ -111,31 +350,13 @@ function calculateKeywordScore(
   }
 
   const resumeText = resume.rawText.toLowerCase();
-  const jdText = jobDescription.toLowerCase();
+  const jdKeywords = extractImportantKeywords(jobDescription);
 
-  // Use important keywords extraction for better matching
-  const jdKeywords = extractImportantKeywords(jdText);
+  if (jdKeywords.length === 0) return 75;
 
-  if (jdKeywords.length === 0) {
-    // Fallback if no important keywords found
-    return 75;
-  }
-
-  // Helper function to check if keyword exists with variations
-  const keywordExists = (keyword: string, text: string): boolean => {
-    const normalized = keyword.toLowerCase();
-    // Check exact match
-    if (text.includes(normalized)) return true;
-    // Check without spaces (e.g., "full stack" -> "fullstack")
-    if (text.includes(normalized.replace(/\s+/g, ""))) return true;
-    // Check with hyphen (e.g., "full stack" -> "full-stack")
-    if (text.includes(normalized.replace(/\s+/g, "-"))) return true;
-    return false;
-  };
-
-  // Count how many JD keywords appear in resume
+  // Count matches using helper function
   const matchedKeywords = jdKeywords.filter((kw) =>
-    keywordExists(kw, resumeText),
+    keywordExistsInText(kw, resumeText),
   );
 
   // Calculate match percentage with better weighting
@@ -352,21 +573,13 @@ function generateRecommendations(
     const resumeText = resume.rawText.toLowerCase();
     const jdKeywords = extractImportantKeywords(jobDescription);
 
-    // Helper function to check if keyword exists with variations
-    const keywordExists = (keyword: string): boolean => {
-      const normalized = keyword.toLowerCase();
-      if (resumeText.includes(normalized)) return true;
-      if (resumeText.includes(normalized.replace(/\s+/g, ""))) return true;
-      if (resumeText.includes(normalized.replace(/\s+/g, "-"))) return true;
-      return false;
-    };
-
     if (jdKeywords.length > 0) {
-      foundKeywords = jdKeywords.filter((kw) => keywordExists(kw));
-      missingKeywords = jdKeywords.filter((kw) => !keywordExists(kw));
-
-      // Filter out keywords that are too common/generic
-      missingKeywords = missingKeywords.filter((kw) => kw.length > 2);
+      foundKeywords = jdKeywords.filter((kw) =>
+        keywordExistsInText(kw, resumeText),
+      );
+      missingKeywords = jdKeywords
+        .filter((kw) => !keywordExistsInText(kw, resumeText))
+        .filter((kw) => kw.length > 2);
 
       // Keyword-specific recommendations
       if (breakdown.keywords < 60) {
@@ -408,294 +621,38 @@ function generateRecommendations(
 /**
  * Extract important keywords from job description
  * Extracts actual technical requirements, skills, and tools mentioned in the JD
- * This tells the developer what they need to add to their resume to match the job
  */
 function extractImportantKeywords(jobDescription: string): string[] {
   const text = jobDescription.toLowerCase();
   const keywords = new Set<string>();
 
-  // Stop words to exclude from extraction
-  const stopWords = new Set([
-    "we",
-    "are",
-    "is",
-    "am",
-    "was",
-    "were",
-    "been",
-    "be",
-    "being",
-    "have",
-    "has",
-    "had",
-    "do",
-    "does",
-    "did",
-    "will",
-    "would",
-    "could",
-    "should",
-    "may",
-    "might",
-    "must",
-    "can",
-    "could",
-    "the",
-    "a",
-    "an",
-    "and",
-    "or",
-    "but",
-    "in",
-    "on",
-    "at",
-    "to",
-    "for",
-    "of",
-    "with",
-    "by",
-    "from",
-    "as",
-    "into",
-    "through",
-    "during",
-    "before",
-    "after",
-    "above",
-    "below",
-    "up",
-    "down",
-    "out",
-    "off",
-    "over",
-    "under",
-    "again",
-    "further",
-    "then",
-    "once",
-    "here",
-    "there",
-    "when",
-    "where",
-    "why",
-    "how",
-    "all",
-    "both",
-    "each",
-    "few",
-    "more",
-    "most",
-    "other",
-    "some",
-    "such",
-    "no",
-    "nor",
-    "not",
-    "only",
-    "own",
-    "same",
-    "so",
-    "than",
-    "too",
-    "very",
-    "this",
-    "that",
-    "these",
-    "those",
-    "who",
-    "which",
-    "what",
-    "our",
-    "your",
-    "their",
-    "seeking",
-    "looking",
-    "join",
-    "team",
-    "company",
-    "role",
-    "position",
-    "opportunity",
-    "candidate",
-    "ideal",
-    "perfect",
-    "great",
-    "good",
-    "excellent",
-    "strong",
-    "solid",
-    "proven",
-    "work",
-    "working",
-    "able",
-    "using",
-    "use",
-    "used",
-    "growing",
-    "dynamic",
-    "fast",
-    "paced",
-    "innovative",
-    "exciting",
-  ]);
-
-  // Technical indicators - if a word appears near these, it's likely important
-  const technicalIndicators = [
-    "experience with",
-    "knowledge of",
-    "proficiency in",
-    "skilled in",
-    "expertise in",
-    "familiar with",
-    "background in",
-    "understanding of",
-    "proficient",
-    "expert",
-    "familiar",
-    "skilled",
-    "experienced",
-  ];
-
-  // Extract multi-word technical terms (e.g., "react.js", "node.js", "full stack")
-  const multiWordPatterns = [
-    /\b(react\.?js|angular\.?js|vue\.?js|next\.?js|node\.?js|express\.?js)\b/gi,
-    /\b(full[- ]stack|front[- ]end|back[- ]end|micro[- ]frontend)\b/gi,
-    /\b(machine learning|artificial intelligence|data science|cloud computing)\b/gi,
-    /\b(ci\/cd|rest api|graphql|nosql|postgresql|mongodb)\b/gi,
-    /\b(aws|azure|gcp|google cloud|cloud platform)\b/gi,
-    /\b(type[- ]?script|java[- ]?script|c\+\+|c#)\b/gi,
-  ];
-
-  multiWordPatterns.forEach((pattern) => {
+  // Extract multi-word technical terms using module-level patterns
+  MULTI_WORD_PATTERNS.forEach((pattern) => {
     const matches = jobDescription.match(pattern);
     if (matches) {
-      matches.forEach((match) => {
-        keywords.add(match.toLowerCase().trim());
-      });
+      matches.forEach((match) => keywords.add(match.toLowerCase().trim()));
     }
   });
 
-  // Extract individual technical words (programming languages, frameworks, tools)
-  // Split on common delimiters and extract words
+  // Extract individual technical words
   const words = text
-    .replace(/[,;\/\(\)\[\]]/g, " ") // Replace delimiters with spaces
+    .replace(/[,;\/\(\)\[\]]/g, " ")
     .split(/\s+/)
     .filter(
-      (word) => word.length >= 3 && !stopWords.has(word) && !/^\d+$/.test(word), // Exclude pure numbers
+      (word) =>
+        word.length >= 3 && !STOP_WORDS.has(word) && !/^\d+$/.test(word),
     );
-
-  // Known technical terms that should always be extracted
-  const knownTech = new Set([
-    "react",
-    "angular",
-    "vue",
-    "svelte",
-    "next",
-    "nuxt",
-    "node",
-    "express",
-    "django",
-    "flask",
-    "spring",
-    "laravel",
-    "typescript",
-    "javascript",
-    "python",
-    "java",
-    "ruby",
-    "php",
-    "go",
-    "rust",
-    "swift",
-    "kotlin",
-    "html",
-    "css",
-    "sass",
-    "scss",
-    "tailwind",
-    "bootstrap",
-    "sql",
-    "mysql",
-    "postgresql",
-    "mongodb",
-    "redis",
-    "elasticsearch",
-    "docker",
-    "kubernetes",
-    "jenkins",
-    "gitlab",
-    "github",
-    "git",
-    "aws",
-    "azure",
-    "gcp",
-    "cloud",
-    "api",
-    "rest",
-    "graphql",
-    "grpc",
-    "agile",
-    "scrum",
-    "kanban",
-    "devops",
-    "testing",
-    "jest",
-    "cypress",
-    "selenium",
-    "mocha",
-    "webpack",
-    "babel",
-    "vite",
-    "rollup",
-    "redux",
-    "mobx",
-    "zustand",
-    "recoil",
-    "microservices",
-    "serverless",
-    "lambda",
-    "linux",
-    "unix",
-    "bash",
-    "shell",
-    "ci",
-    "cd",
-    "pipeline",
-    "deployment",
-    "frontend",
-    "backend",
-    "fullstack",
-    "design",
-    "architecture",
-    "patterns",
-    "performance",
-    "optimization",
-    "scalability",
-    "security",
-    "authentication",
-    "authorization",
-    "developer",
-    "engineer",
-    "programmer",
-    "architect",
-    "lead",
-    "senior",
-  ]);
 
   // Add known technical terms found in the JD
   words.forEach((word) => {
-    if (knownTech.has(word)) {
-      keywords.add(word);
-    }
+    if (KNOWN_TECH.has(word)) keywords.add(word);
   });
 
   // Extract years of experience requirement
   const yearsMatch = text.match(
     /(\d+)\+?\s*(?:years?|yrs?)\s*(?:of\s*)?(?:experience|exp)?/i,
   );
-  if (yearsMatch) {
-    keywords.add(`${yearsMatch[1]}+ years experience`);
-  }
+  if (yearsMatch) keywords.add(`${yearsMatch[1]}+ years experience`);
 
   // Extract degree requirements
   if (/bachelor'?s?\b|b\.?s\.?|b\.?a\.?|undergraduate/i.test(text)) {
@@ -705,24 +662,10 @@ function extractImportantKeywords(jobDescription: string): string[] {
     keywords.add("master's degree");
   }
 
-  // Extract certification keywords if mentioned
-  const certKeywords = ["certification", "certified", "certificate"];
-  certKeywords.forEach((cert) => {
-    if (text.includes(cert)) {
-      // Look for the certification name nearby
-      const certMatch = text.match(new RegExp(`(\\w+)\\s+${cert}`, "i"));
-      if (certMatch) {
-        keywords.add(`${certMatch[1]} certification`);
-      }
-    }
-  });
-
-  // Remove single/two letter words and pure numbers
-  const filtered = Array.from(keywords).filter(
-    (kw) => kw.length > 2 && !stopWords.has(kw) && !/^[\d\s]+$/.test(kw),
+  // Filter and return
+  return Array.from(keywords).filter(
+    (kw) => kw.length > 2 && !STOP_WORDS.has(kw) && !/^[\d\s]+$/.test(kw),
   );
-
-  return filtered;
 }
 
 /**
@@ -744,24 +687,16 @@ export function compareWithJobDescription(
   const matchedSkills: string[] = [];
   const missingSkills: string[] = [];
 
-  // Helper function to check if keyword exists with variations
+  // Enhanced keyword checker that also checks extracted skills
   const keywordExists = (keyword: string): boolean => {
+    if (keywordExistsInText(keyword, resumeText)) return true;
     const normalized = keyword.toLowerCase();
-    // Check in resume text with variations
-    if (resumeText.includes(normalized)) return true;
-    if (resumeText.includes(normalized.replace(/\s+/g, ""))) return true;
-    if (resumeText.includes(normalized.replace(/\s+/g, "-"))) return true;
-    // Check in extracted skills
-    if (
-      resumeSkills.some(
-        (skill) =>
-          skill.includes(normalized) ||
-          skill === normalized.replace(/\s+/g, "") ||
-          skill === normalized.replace(/\s+/g, "-"),
-      )
-    )
-      return true;
-    return false;
+    return resumeSkills.some(
+      (skill) =>
+        skill.includes(normalized) ||
+        skill === normalized.replace(/\s+/g, "") ||
+        skill === normalized.replace(/\s+/g, "-"),
+    );
   };
 
   jdKeywords.forEach((keyword) => {

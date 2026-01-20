@@ -104,7 +104,7 @@ export default function JDMatchPage() {
         <textarea
           value={jdText}
           onChange={(e) => setJdText(e.target.value)}
-          className="w-full h-48 border border-gray-300 rounded-lg p-4 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full h-48 border border-gray-300 rounded-lg p-4 text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
           placeholder="Paste the complete job description here, including requirements, qualifications, and responsibilities..."
           disabled={showResults}
         />
