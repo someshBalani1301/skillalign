@@ -42,12 +42,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const savedJD = getJobDescription();
 
     if (savedResume) {
+      console.log("Loading saved resume from storage");
       setResumeState(savedResume);
-    } else {
-      // Use sample data if nothing saved
-      setResumeState(sampleResume);
-      saveResume(sampleResume);
     }
+    // Don't auto-load sample data - let user upload
 
     if (savedJD) {
       setJobDescriptionState(savedJD);
@@ -60,17 +58,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Recalculate scores when resume or JD changes
   useEffect(() => {
     if (resume) {
-      const score = calculateATSScore(resume);
-      setAtsScore(score);
-    }
-  }, [resume]);
-
-  useEffect(() => {
-    if (resume && jobDescription) {
-      const analysis = analyzeJobMatch(resume, jobDescription);
-      setMatchAnalysis(analysis);
+      calculateScoresFromAPI(resume, jobDescription?.description);
     }
   }, [resume, jobDescription]);
+
+  // Calculate scores using API
+  const calculateScoresFromAPI = async (
+    currentResume: Resume,
+    jdText?: string,
+  ) => {
+    try {
+      const response = await fetch("/api/resume/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resume: currentResume,
+          jobDescription: jdText,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          setAtsScore(result.data.atsScore);
+          if (result.data.matchAnalysis) {
+            // Convert matchAnalysis to MatchAnalysis type
+            const match: MatchAnalysis = {
+              matchScore: result.data.matchAnalysis.matchScore,
+              matchedSkills: result.data.matchAnalysis.matchedSkills,
+              missingSkills: result.data.matchAnalysis.missingSkills,
+              matchedRequirements: [],
+              missingRequirements: [],
+              suggestions: result.data.matchAnalysis.suggestions,
+            };
+            setMatchAnalysis(match);
+          }
+        }
+      } else {
+        // Fallback to mock data
+        const score = calculateATSScore(currentResume);
+        setAtsScore(score);
+      }
+    } catch (error) {
+      console.error("Error calculating scores:", error);
+      // Fallback to mock data
+      const score = calculateATSScore(currentResume);
+      setAtsScore(score);
+    }
+  };
 
   const setResume = (newResume: Resume) => {
     setResumeState(newResume);
@@ -84,12 +119,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshScores = () => {
     if (resume) {
-      const score = calculateATSScore(resume);
-      setAtsScore(score);
-    }
-    if (resume && jobDescription) {
-      const analysis = analyzeJobMatch(resume, jobDescription);
-      setMatchAnalysis(analysis);
+      calculateScoresFromAPI(resume, jobDescription?.description);
     }
   };
 

@@ -10,6 +10,7 @@ import { Button, Card, Alert } from "@/components/ui";
 import FileUploadZone from "@/components/upload/FileUploadZone";
 import { ROUTES, MESSAGES } from "@/lib/constants";
 import { formatDate } from "@/utils";
+import { extractTextFromPDF } from "@/lib/clientPdfParser";
 
 export default function UploadPage() {
   const router = useRouter();
@@ -20,53 +21,99 @@ export default function UploadPage() {
   const handleFileSelect = async (file: File) => {
     setIsProcessing(true);
 
-    // Simulate file processing
-    setTimeout(() => {
+    try {
+      console.log(
+        "Uploading file:",
+        file.name,
+        "Type:",
+        file.type,
+        "Size:",
+        file.size,
+      );
+
+      let extractedText = "";
+
+      // Parse PDF client-side to avoid Node.js canvas issues
+      if (file.type === "application/pdf") {
+        console.log("Parsing PDF client-side...");
+        extractedText = await extractTextFromPDF(file);
+        console.log("PDF text extracted, length:", extractedText.length);
+      } else {
+        // For DOCX, still use server-side parsing
+        console.log("Parsing DOCX server-side...");
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch("/api/resume/parse", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to parse resume");
+        }
+
+        const result = await response.json();
+        if (!result.success) {
+          throw new Error(result.error || "Failed to parse resume");
+        }
+
+        extractedText = result.data.rawText;
+      }
+
+      // Send extracted text to server for structured parsing
+      console.log("Sending text for structured parsing...");
+      const parseResponse = await fetch("/api/resume/parse-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: extractedText,
+          fileName: file.name,
+        }),
+      });
+
+      if (!parseResponse.ok) {
+        const errorData = await parseResponse.json();
+        console.error("Parse text API error:", errorData);
+        throw new Error(errorData.error || "Failed to parse resume");
+      }
+
+      const parseResult = await parseResponse.json();
+      console.log("Parse result:", parseResult);
+
+      if (!parseResult.success) {
+        console.error("Parse unsuccessful:", parseResult);
+        throw new Error(parseResult.error || "Failed to parse resume");
+      }
+
+      // Create resume object from parsed data
       const newResume: Resume = {
         id: Math.random().toString(36).substr(2, 9),
         fileName: file.name,
         uploadDate: new Date(),
-        rawText: "Extracted text from uploaded file...",
-        content: {
-          personalInfo: {
-            name: "Your Name",
-            email: "your.email@example.com",
-            phone: "+1 (555) 000-0000",
-            location: "Your City, State",
-          },
-          summary: "Professional summary extracted from your resume...",
-          experience: [
-            {
-              id: "exp1",
-              company: "Your Company",
-              position: "Your Position",
-              startDate: "2020-01",
-              endDate: "Present",
-              bullets: [
-                "Achievement or responsibility from your resume",
-                "Another achievement with quantifiable results",
-                "Key project or initiative you led",
-              ],
-            },
-          ],
-          education: [
-            {
-              id: "edu1",
-              institution: "Your University",
-              degree: "Your Degree",
-              field: "Your Field",
-              startDate: "2015-09",
-              endDate: "2019-05",
-            },
-          ],
-          skills: ["Skill 1", "Skill 2", "Skill 3", "Skill 4", "Skill 5"],
-        },
+        rawText: extractedText,
+        content: parseResult.data.content,
       };
 
+      console.log("Resume created successfully");
+      console.log("Resume created:", newResume);
+
+      // Store resume in context
       setResume(newResume);
-      setIsProcessing(false);
+
+      // Navigate to score page
       router.push(ROUTES.DASHBOARD.SCORE);
-    }, 2000);
+    } catch (error) {
+      console.error("Error parsing resume:", error);
+      alert(
+        error instanceof Error
+          ? `Error: ${error.message}`
+          : "Failed to parse resume. Please try again with a different file.",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleUseSample = () => {
